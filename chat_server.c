@@ -20,50 +20,70 @@ struct User {
 
 int main(int argc, char * argv[]){
 
-    struct       sockaddr_in addr, cli_addr; 
-    int master_socket, client_socket;
-    int bind_id;
-    int listen_id;
-    int val;
+    struct       sockaddr_in addr, cli_addr, footAddr, baseAddr; 
+    int master_socket, client_socket, bind_id, listen_id, listen_id_two, listen_id_three, val, 
+    send_id, newmaster_socket, recieve_id, i, max_sd, activity, y, name_index, foot_socket, base_socket, u, x;
+
+    int client_socketArray[10], master_socketArray[10], base_socket_Array[10], foot_socket_Array[10], temp_sock_array[10];
     unsigned int clilen;
-    char message[BUFF_SIZE], temp_message[BUFF_SIZE];
-    int send_id;
-    int newmaster_socket;
-    int recieve_id;
-    int client_socketArray[10]; 
-    char client_Message[BUFF_SIZE];
+    char message[BUFF_SIZE], temp_message[BUFF_SIZE], client_Message[BUFF_SIZE];
     int max_connection = 10;
     int opt = 1;
-    int i;
-    int max_sd;
     int current_fd = 0;
     fd_set readfds, testfds;
-    int activity;
-    int y;
     char name_split = '[';
     char * char_name;
-    int name_index;
+    char *name_of_room;
+    int cur_cli_port_number;
+
     //initialise all client_socket[] to 0 so not checked 
     for (i = 0; i < max_connection; i++)  
     {  
         client_socketArray[i] = -1;  
+        master_socketArray[i] = -1;
+        base_socket_Array[i] = -1;
+        foot_socket_Array[i] = -1;
+        temp_sock_array[i] = -1;
     }  
      // create master socket
     master_socket = socket(AF_INET, SOCK_STREAM, 0);
+    foot_socket = socket(AF_INET, SOCK_STREAM, 0);
+    base_socket = socket(AF_INET, SOCK_STREAM, 0);
     if(master_socket < 0){
-		perror("server: can't open stream socket");
+		perror("server: can't open stream socket one");
         exit(1);
 	}
+    printf("Socket Number One %d\n", master_socket);
+    if(foot_socket < 0){
+        perror("server: can't open stream socket three");
+        exit(1);
+    }
+    printf("Socket Number Two %d\n", foot_socket);
+    if(base_socket < 0){
+        perror("server: can't open stream socket three");
+        exit(1);
+    }
+    printf("Socket Number Three %d\n", base_socket);
     //set master socket to allow multiple connections , 
     //this is just a good habit, it will work without this 
     if( setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0 )  
     {  
-        perror("setsockopt");  
+        perror("setsockopt one");  
         exit(1);  
     }  
-    printf("Socket Created!\n");
-
-    // bind socket
+    
+    if( setsockopt(foot_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0 )  
+    {  
+        perror("setsockopt two");  
+        exit(1);  
+    }  
+    if( setsockopt(base_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0 )  
+    {  
+        perror("setsockopt three");  
+        exit(1);  
+    }  
+    printf("All Three Sockets Created!\n");
+    // bind socket one
 	memset((char *)&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -71,31 +91,74 @@ int main(int argc, char * argv[]){
 
     bind_id = bind(master_socket, (struct sockaddr *) &addr, sizeof(addr));
     if (bind_id < 0){
-    	perror("server: can't bind local address");
+    	perror("server: can't bind to first local address");
         exit(1);
     }
 
+    // bind socket two
+    memset((char *)&footAddr, 0, sizeof(footAddr));
+    footAddr.sin_family = AF_INET;
+    footAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    footAddr.sin_port = htons(atoi(argv[2]));
+
+    bind_id = bind(foot_socket, (struct sockaddr *) &footAddr, sizeof(footAddr));
+    if (bind_id < 0){
+        perror("server: can't bind to second local address");
+        exit(1);
+    }
+
+    // bind socket three
+    memset((char *)&baseAddr, 0, sizeof(baseAddr));
+    baseAddr.sin_family = AF_INET;
+    baseAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    baseAddr.sin_port = htons(atoi(argv[3]));
+
+    bind_id = bind(base_socket, (struct sockaddr *) &baseAddr, sizeof(baseAddr));
+    if (bind_id < 0){
+        perror("server: can't bind to third local address");
+        exit(1);
+    }
+
+
     listen_id = listen(master_socket, 10);
+    listen_id_two = listen(foot_socket, 10);
+    listen_id_three = listen(base_socket, 10);
     if(listen_id < 0) {
       perror("You are already connected");
     }
-    printf("Live and Listening!\n");
+    printf("Live and Listening at port %d!\n",   ntohs(addr.sin_port));
+    if(listen_id_two < 0) {
+      perror("You are already connected to second port");
+    }
+     printf("Live and Listening at port %d!\n",   ntohs(footAddr.sin_port));
+    if(listen_id_three < 0) {
+      perror("You are already connected to third port");
+    }
+    printf("Live and Listening at port %d!\n",   ntohs(baseAddr.sin_port));
+    
 
     printf("Waiting for connections\n");
 
+
     val = 2;
-    //fflush(stdout);
-    
     max_sd = master_socket;
+    if(max_sd < base_socket){
+        max_sd = base_socket;
+    }
+    if(max_sd < foot_socket){
+        max_sd = base_socket;
+    }
     while (val > 0) {
 
         FD_ZERO(&readfds);
         FD_SET(master_socket, &readfds);
+        FD_SET(foot_socket, &readfds);
+        FD_SET(base_socket, &readfds);
+
         for(i = 0; i < max_connection; i++){
             if(client_socketArray[i] != -1){
                 FD_SET(client_socketArray[i], &readfds);
                  //printf("value is inside sets %d\n", client_socketArray[i]);
-
             }
             else{
                 //printf("no value is inside sets %d %d\n", master_socket, FD_SETSIZE);
@@ -126,40 +189,96 @@ int main(int argc, char * argv[]){
             /*
             */
             if(FD_ISSET(i, &readfds)){
-               printf("value is inside %d %d\n", i, master_socket);
-                if(i == master_socket){
-                    printf("I am master");
-                    clilen = sizeof(cli_addr);
-                    client_socket = accept(master_socket, (struct sockaddr *) &cli_addr, &clilen);
-                    if (client_socket < 0){
-                        perror("accept");
-                        exit(1);
+               printf("got signal from %d \n", i);
+                if(i == master_socket || i == base_socket || i == foot_socket) {
+                    //printf("Connecting to port %d\n", ntohs(addr.sin_port));
+                    if(i == master_socket){
+                        clilen = sizeof(cli_addr);
+                        client_socket = accept(master_socket, (struct sockaddr *) &cli_addr, &clilen);
+                        if (client_socket < 0){
+                            perror("accept");
+                            exit(1);
+                        }
+                        snprintf(message, BUFF_SIZE, "Connected to Slack Chat Room\0", name_of_room);
+                        name_of_room = "Slack\0";
+                        printf("Welcome message tried sent successfully from master_socket!\n");
+                        max_sd = max_sd + 1;
+                        for(y = 0; y < max_connection; y++){
+                        // if position is empty
+                            //printf("Not Adding to list of socket as %d\n", y);
+                            if (master_socketArray[y] == -1){
+                                master_socketArray[y] = client_socket;
+                                printf("Adding to list of socket as %d\n", client_socket);
+                                break;
+                            }
+                        }
+                    }
+                    else if(i == base_socket){
+                       clilen = sizeof(cli_addr);
+                        client_socket = accept(base_socket, (struct sockaddr *) &cli_addr, &clilen);
+                        if (client_socket < 0){
+                            perror("accept");
+                            exit(1);
+                        } 
+                        name_of_room = "Facebook\0";
+                        snprintf(message, BUFF_SIZE, "Connected to Facebook Chat Room\0", name_of_room);
+                        printf("Welcome message tried sent successfully from base socket!\n");
+                        max_sd = max_sd + 1;
+                        for(y = 0; y < max_connection; y++){
+                        // if position is empty
+                            //printf("Not Adding to list of socket as %d\n", y);
+                            if (base_socket_Array[y] == -1){
+                                base_socket_Array[y] = client_socket;
+                                //printf("Adding to list of socket as %d\n", y);
+                                break;
+                            }
+                        }
+                    }
+                    else{
+                        clilen = sizeof(cli_addr);
+                        client_socket = accept(foot_socket, (struct sockaddr *) &cli_addr, &clilen);
+                        if (client_socket < 0){
+                            perror("accept");
+                            exit(1);
+                        }
+                        name_of_room = "Skype\0";
+                        snprintf(message, BUFF_SIZE, "Connected to Skype Chat Room\0", name_of_room);
+                        printf("Welcome message try sending successfully from foot_socket !\n");
+                        max_sd = max_sd + 1;
+                        for(y = 0; y < max_connection; y++){
+                        // if position is empty
+                            printf("Not Adding to list of socket as %d\n", y);
+                            if (foot_socket_Array[y] == -1){
+                                foot_socket_Array[y] = client_socket;
+                                printf("Adding to list of socket as %d\n", y);
+                                break;
+                            }
+                        }
                     }
                     printf("New connection , socket fd is %d , ip is : %s , port : %d\n" , 
                     client_socket , inet_ntoa(cli_addr.sin_addr) , 
                      ntohs(cli_addr.sin_port));  
-                    snprintf(message, BUFF_SIZE, "Connected\0");
+                    
                     // check if connection already exist
                     send_id = send(client_socket, message, BUFF_SIZE, 0);
                     if(send_id < 0){
                         perror("send error");
                         exit(1);
-                    }
-                    printf("Welcome message sent successfully!\n");
-                    max_sd = max_sd + 1;
-                    for(y = 0; y < max_connection; y++){
-                    // if position is empty
-                        printf("Not Adding to list of socket as %d\n", y);
-                        if (client_socketArray[y] == -1){
-                            client_socketArray[y] = client_socket;
-                            printf("Adding to list of socket as %d\n", y);
-                            break;
-                        }
-                    }
+                    }     
                     //printf("did stuff!\n");
+                    printf("Welcome message sent successfully!\n");
+                    for(y = 0; y < max_connection; y++){
+                        // if position is empty
+                            //printf("Not Adding to list of socket as %d\n", y);
+                            if (client_socketArray[y] == -1){
+                                client_socketArray[y] = client_socket;
+                                //printf("Adding to list of socket as %d\n", y);
+                                break;
+                            }
+                    }
                 }
                 else {
-                   // printf("Print Else !\n");
+                   printf("Print Recieve Message from a port !\n");
 
                 // else its some IO operation on some other socket
                     for( i = 0; i < max_connection; i++){
@@ -190,23 +309,47 @@ int main(int argc, char * argv[]){
                                 perror("something went wrong");
                             }
                             else{
+                                printf("Trying to sending information to other client on user port!\n");
+                                
+                                if (getsockname(current_fd, (struct sockaddr *)&cli_addr, &clilen) == -1){
+                                    perror("getting socket name error");
+                                    continue;
+                                }
+                                else{
+                                    cur_cli_port_number = ntohs(cli_addr.sin_port);
+                                    printf("Got port number of user that is sending next message. port: %d\n", cur_cli_port_number);
+                                     memset(temp_sock_array, -1, sizeof(temp_sock_array) + 1);
+                                    if(cur_cli_port_number == ntohs(addr.sin_port)){
+                                       memcpy(temp_sock_array, master_socketArray, sizeof(master_socketArray) + 1);
+                                       for(u = 0; u < sizeof(master_socket); u++){
+                                        printf("%d %d\n", temp_sock_array[u], master_socketArray[u]);
+                                       }
+                                    }
+                                    else if(cur_cli_port_number == ntohs(baseAddr.sin_port)){
+                                        memcpy(temp_sock_array, base_socket_Array, sizeof(base_socket_Array) + 1);
+                                    }
+                                    else{
+                                        memcpy(temp_sock_array, foot_socket_Array, sizeof(foot_socket_Array) + 1);
+                                    }
                                 //client_Message[recieve_id] = '\0';
-                                for(i = 0; i < max_connection; i++){
-                                    current_fd = client_socketArray[i];
-                                    memset(message, 0, BUFF_SIZE);
-                                    //printf("from socket %d\n", current_fd);
-                                    if(current_fd != -1){
-                                        
-                                        sprintf(message, "<%s> %s", char_name, temp_message);
-                                        printf("from client message %s %d\n",message, strlen(message));
-                                        send_id = write(current_fd, message, strlen(message));
-                                        if(send_id < 0){
-                                            perror("error sending to a user");
-                                        }
-                                    } 
+                                    for(x = 0; x < max_connection; x++){
+                                        current_fd = temp_sock_array[x];
+                                        memset(message, 0, BUFF_SIZE);
+                                        //printf("from socket %d\n", current_fd);
+                                        if(current_fd != -1){
+                                            
+                                            sprintf(message, "<%s> %s", char_name, temp_message);
+                                            printf("from client message %s %d\n",message, current_fd);
+                                            send_id = write(current_fd, message, strlen(message));
+                                            if(send_id < 0){
+                                                perror("error sending to a user");
+                                            }
+                                        } 
+                                    }
                                 }
                             }
                         }
+
                     }
                     
                 }
